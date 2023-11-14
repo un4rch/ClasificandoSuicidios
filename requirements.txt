@@ -1,0 +1,7 @@
+# Data processing
+pandas
+# NLP preprocessing
+nltk
+# Data visualization
+seaborn
+matplotlib
