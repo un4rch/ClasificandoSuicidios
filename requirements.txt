@@ -1,7 +1,13 @@
+# machine learning
+scikit-learn
 # Data processing
 pandas
 # NLP preprocessing
 nltk
+gensim
 # Data visualization
 seaborn
 matplotlib
+# others
+emoji
+emot
