@@ -1,5 +1,8 @@
 # ClasificandoSuicidios
-
+## Clonar el repositorio
+```
+git clone https://github.com/un4rch/ClasificandoSuicidios.git
+```
 ## Activar entorno virtual
 ```
 python -m venv clasificando_suicidios
