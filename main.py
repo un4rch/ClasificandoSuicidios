@@ -25,6 +25,7 @@ import string
 """
 # System libraries
 import os
+import sys
 # Visualization libraries
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -34,8 +35,10 @@ import pandas as pd # frames (tables)
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+from preprocessor import Preprocessor
 
-preprocessedFile = "Preprocessed_Suicide_Detection.csv"
+#preprocessedFile = "Preprocessed_Suicide_Detection.csv"
+preprocessedFile = None
 unpreprocessedFile = "Suicide_Detection.csv"
 savePreprocess = "Preprocessed_Suicide_Detection.csv"
 output_dir = "output"
@@ -53,7 +56,15 @@ def cargarDataset(pFileName):
     return df
 
 def preprocesado(dataFrame):
-    # Convertir a minusculas
+    prerocessor = Preprocessor()
+    for row in dataFrame['text'].values:
+        print("----------------------------------------")
+        print(row)
+        linea = prerocessor.preprocesarLenguajeNatural(row, True)
+        print(linea)
+    print(linea)
+    sys.exit(0)
+    """# Convertir a minusculas
     dataFrame['text']= dataFrame['text'].str.lower()
     # Eliminar puntuaciones
     dataFrame['text'] = dataFrame['text'].str.replace(r'[^\w\s]+', '',regex = True)
@@ -64,7 +75,7 @@ def preprocesado(dataFrame):
     # Lematizar palabras (stemming)
     ps = PorterStemmer()
     dataFrame['text'] = dataFrame['text'].apply(lambda x : [ps.stem(i) for i in x])
-    dataFrame['text']=dataFrame['text'].apply(lambda x : ' '.join(x))
+    dataFrame['text']=dataFrame['text'].apply(lambda x : ' '.join(x))"""
     # Eliminar si hay algun valor vacio
     #ind = dataFrame[dataFrame['text'].isnull()].index # indice de instancias vacias
     #print(dataFrame.iloc[ind]) # imprimir contenido de las instancias vacias
@@ -123,7 +134,7 @@ def boxplotTextLengths(dataFrame, fileName):
 
 def visualizeBalanced(dataFrame, fileName):
     classCnt = df['class'].value_counts()
-    print(classCnt)
+    #print(classCnt)
 
     plt.figure(figsize=((20,5)))
 
@@ -160,5 +171,3 @@ if __name__ == "__main__":
     boxplotTextLengths(df, "text_lenghts_boxplot_after_cleaning.png")
     # Coger los textos y las etiquetas
     x,y = df['text'],df['class']
-    
-    
