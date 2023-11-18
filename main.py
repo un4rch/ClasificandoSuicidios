@@ -1,5 +1,5 @@
-# Visualizacion de embeddings: https://projector.tensorflow.org/
-# TODO al guardar los embeddings, verificar que se guardan bien, ya que con to_csv se guardan distinto
+# TODO Visualizacion de embeddings para informe: https://projector.tensorflow.org/
+# TODO al guardar los embeddings, verificar que se guardan bien, ya que con to_csv creo que se guardan distinto (puede ser una causa de que no haga bien las predicciones)
 # TODO multinomialNB da error con embeddings por contener valores negativos, ver si se puede arreglar y sino, pues no usarlo
 # TODO verificar que los valores se predicen bien: https://www.kaggle.com/code/rutujapotdar/suicide-text-classification-nlp#Conclusion
 
