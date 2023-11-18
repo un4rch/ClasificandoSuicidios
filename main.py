@@ -1,6 +1,7 @@
 # Visualizacion de embeddings: https://projector.tensorflow.org/
 # TODO al guardar los embeddings, verificar que se guardan bien, ya que con to_csv se guardan distinto
 # TODO multinomialNB da error con embeddings por contener valores negativos, ver si se puede arreglar y sino, pues no usarlo
+# TODO verificar que los valores se predicen bien: https://www.kaggle.com/code/rutujapotdar/suicide-text-classification-nlp#Conclusion
 
 # Algoritmos: 
 #import ast
@@ -41,7 +42,7 @@ from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
 import evaluate
 from sklearn import metrics
 
-preprocessedFile = "Preprocessed_Suicide_Detection.csv"
+preprocessedFile = None
 unpreprocessedFile = "Suicide_Detection.csv"
 guardarPreproceso = "Preprocessed_Suicide_Detection.csv"
 output_dir = "output"
@@ -51,8 +52,9 @@ textLengthsFilter = 10000 # Se eliminan los textos cuya longitud sea mas de 1000
 histogramIntervals = 500
 pca_dimensions = 200
 doc2vec_vectors_size = 1500
-doc2vec_model = None
-pca_model = None
+doc2vec_model = "Suicide_Detection_doc2vec.model"
+pca_model = "Suicide_Detection_pca.model"
+prediction_model = "EnsembleMethods_model.pkl"
 
 def cargarDataset(pFileName):
     # Cargar los datos
@@ -64,8 +66,9 @@ def cargarDataset(pFileName):
     return df
 
 def preprocesado(dataFrame, doc2vec_model, pca_model):
-    # Obtener 10000 instancias
-    dataFrame = dataFrame.sample(n=10000, random_state=42)
+    if df.shape[0] > 1000:
+        # Obtener 10000 instancias
+        dataFrame = dataFrame.sample(n=10000, random_state=42)
     # Filtrar textos por longitud usando un umbral
     dataFrame = dataFrame[dataFrame['text_length']<=textLengthsFilter]
     # Preprocesamos los datos
@@ -174,18 +177,42 @@ if __name__ == "__main__":
     if not preprocessedFile:
         print("[*] Preprocesando datos...")
         df = preprocesado(df, doc2vec_model, pca_model)
+        embeddings = [point for point in df['text']]
+        labels = np.asarray(df['class'])
     else:
         df = cargarDataset(preprocessedFile)
         # Eliminar \n para cargar los embeddings si los hay
         df['text'] = df['text'].replace('\n', '', regex=True)
-    
-    # Cargar los datos preprocesados en arrays
-    embeddings = [eval(point) for point in df['text']]
-    labels = np.asarray(df['class'])
+        # Cargar los datos preprocesados en arrays
+        embeddings = [eval(point) for point in df['text']]
+        labels = np.asarray(df['class'])
+
+    if not train:
+        # TODO: arreglar predicciones
+        df_original = cargarDataset(unpreprocessedFile)
+        print("[*] Realizando prediciones...")
+        with open(prediction_model, "rb") as file:
+            model = pickle.load(file)
+        for idx,text in enumerate(df['text']):
+            print(f"Text: {df_original['text'][idx]}")
+            print(f"preficted: {model.predict([text])[0]}")
+            print()
+        fileName = "predicted.csv"
+        with open(f"{output_dir}/{fileName}", "w") as file:
+            writer = csv.writer(file)
+            writer.writerow(["text","class"])
+            for idx,text in enumerate(df['text']):
+                original_text = df_original['text'][idx]
+                writer.writerow([original_text,model.predict([text])[0]])
+        print(f"    Fichero guardado: {output_dir}/{fileName}")
+        sys.exit(0)
 
     print("[*] Entrenando modelos...")        
     # Separar dataset en entrenamiento y pruebas
     X_train,X_test,y_train,y_test = train_test_split(embeddings,labels,test_size=0.2,random_state=42)
+
+    # Guardar los scores de cada modelo de clasificacion en un array
+    classification_scores = [] # (nombreClasificador, modelo, training_score, testing_score)
 
     # Clasificacion GaussianNB
     print(f"\t\t\tGaussianNB")
@@ -197,6 +224,7 @@ if __name__ == "__main__":
     print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_gaussianNB.png", cmap='summer')
     print()
+    classification_scores.append(("GaussianNB", gnb, gnb.score(X_train,y_train), gnb.score(X_test,y_test)))
 
     """# Clasificacion MultinomialNB
     mnb = MultinomialNB()
@@ -216,6 +244,7 @@ if __name__ == "__main__":
     print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_binomialNB.png", cmap='summer')
     print()
+    classification_scores.append(("BernoulliNB", bnb, bnb.score(X_train,y_train), bnb.score(X_test,y_test)))
 
     # Clsificacion Random Forest
     print(f"\t\t\tRandomForest")
@@ -232,6 +261,7 @@ if __name__ == "__main__":
     print(classification_report(y_act,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_RandomForest.png", cmap='Spectral')
     print()
+    classification_scores.append(("RandomForest", rfc, rfc.score(X_train,y_train), rfc.score(X_test,y_test)))
 
     # Clsificacion Decision Tree
     print(f"\t\t\tDecisionTree")
@@ -246,6 +276,7 @@ if __name__ == "__main__":
     print(classification_report(y_act,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_DecisionTree.png", cmap='PiYG')
     print()
+    classification_scores.append(("DecisionTree", dtc, dtc.score(X_train,y_train), dtc.score(X_test,y_test)))
 
     # TODO Meter mas modelos de prediccion
 
@@ -267,6 +298,22 @@ if __name__ == "__main__":
     print(classification_report(y_act,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_EnsembleMethods.png", cmap='PiYG')
     print()
+    classification_scores.append(("EnsembleMethods", ensemble_model,ensemble_model.score(X_train,y_train), ensemble_model.score(X_test,y_test)))
+
+    # Guardar el modelo con mejor score
+    print("[*] Guardando el mejor modelo")
+    bestModel = None
+    bestScore = 0
+    for clasifier,modelo,train_score,test_score in classification_scores:
+        score = (train_score+test_score)/2
+        if score >= bestScore:
+            bestModel = modelo
+    fileName = f"{clasifier}_model.pkl"
+    with open(fileName, "wb") as file:
+        pickle.dump(bestModel, file)
+    print(f"    Mejor modelo: {clasifier}")
+    print(f"    Fichero guardado: {fileName}")
+
 
     """
     # Buscar el modelo con mejores hyperparametros:
