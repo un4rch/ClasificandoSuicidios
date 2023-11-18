@@ -1,5 +1,8 @@
 # machine learning
 scikit-learn
+xgboost
+# Model evaluation
+evaluate
 # Data processing
 pandas
 # NLP preprocessing
