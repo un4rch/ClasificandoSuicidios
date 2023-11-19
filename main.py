@@ -1,7 +1,10 @@
-# TODO Visualizacion de embeddings para informe: https://projector.tensorflow.org/
 # TODO al guardar los embeddings, verificar que se guardan bien, ya que con to_csv creo que se guardan distinto (puede ser una causa de que no haga bien las predicciones)
-# TODO multinomialNB da error con embeddings por contener valores negativos, ver si se puede arreglar y sino, pues no usarlo
 # TODO verificar que los valores se predicen bien: https://www.kaggle.com/code/rutujapotdar/suicide-text-classification-nlp#Conclusion
+"""y fotos que deberíamos poner son:
+- un diagrama de barras para comparar los fscores de los métodos de clasificación que utilizamos
+ - las matrices de confusión de los algoritmos más relevantes de la primera pregunta
+- una representación de que nuestros datos están equilibrados
+- un diagrama de puntos de como afecta el ruido de la 2a pregunta"""
 
 # Algoritmos: 
 #import ast
@@ -42,7 +45,7 @@ from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
 import evaluate
 from sklearn import metrics
 
-preprocessedFile = None
+preprocessedFile = "Preprocessed_Suicide_Detection.csv" # None
 unpreprocessedFile = "Suicide_Detection.csv"
 guardarPreproceso = "Preprocessed_Suicide_Detection.csv"
 output_dir = "output"
@@ -226,13 +229,20 @@ if __name__ == "__main__":
     print()
     classification_scores.append(("GaussianNB", gnb, gnb.score(X_train,y_train), gnb.score(X_test,y_test)))
 
-    """# Clasificacion MultinomialNB
+    # Clasificacion MultinomialNB
+    print(f"\t\t\tMultinomialNB")
+    print(f"{24*'-'}--------------{24*'-'}")
     mnb = MultinomialNB()
-    mnb.fit(X_train, y_train)
-    y_pred = mnb.predict(X_test)
+    correccion = 5 # El valor mas negativo suele oscilar alrededor del 4, 5 nos asegura que es mayor
+    X_train2 = [[x + correccion for x in vector] for vector in X_train]
+    X_test2 = [[x + correccion for x in vector] for vector in X_test]
+    mnb.fit(X_train2, y_train)
+    y_pred = mnb.predict(X_test2)
     cm = confusion_matrix(y_test,y_pred)
     print(classification_report(y_test,y_pred))
-    saveConfussionMatrix(cm, "d", "confussion_matrix_multinomialNB.png")"""
+    saveConfussionMatrix(cm, "d", "confussion_matrix_multinomialNB.png", cmap='summer')
+    print()
+    classification_scores.append(("MultinomialNB", mnb, mnb.score(X_train2,y_train), mnb.score(X_test2,y_test)))
     
     # Clasificacion BernoulliNB
     print(f"\t\t\tBernoulliNB")
