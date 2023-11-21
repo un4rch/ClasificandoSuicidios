@@ -14,6 +14,7 @@ from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
 import pickle
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 class Preprocessor:
     def __init__(self) -> None:
@@ -93,10 +94,14 @@ class Preprocessor:
         x_cleaned = [self.preprocesarLenguajeNatural(t, "switch") for t in texts_array]
         x_tokenized = [[w for w in sentence.split(" ") if w != ""] for sentence in x_cleaned]
 
-        # Mapea las etiquetas únicas a valores numéricos
+        """# Mapea las etiquetas únicas a valores numéricos
         if not pd.isnull(labels_array).all():
             label_map = {cat:index for index,cat in enumerate(np.unique(labels_array))}
             y_prep = np.asarray([label_map[l] for l in labels_array])
+        else:
+            y_prep = None"""
+        if not pd.isnull(labels_array).all():
+            y_prep = np.asarray([l for l in labels_array])
         else:
             y_prep = None
 
@@ -129,3 +134,7 @@ class Preprocessor:
 
         # Devuelve los datos procesados, etiquetas, modelo Doc2Vec y modelo PCA
         return x_prep, y_prep, model, pca_model
+
+    def tf_idf(self, data, vocabulary=None):
+        vectorizer = TfidfVectorizer(vocabulary=vocabulary)
+        return vectorizer.fit_transform(data).toarray()
