@@ -15,17 +15,20 @@ pip3 install -r requirements.txt
 ## Ejecutar la aplicacion
 ### Entrenar modelo (Datos SIN preprocesar)
 ```
-python3 main.py config/trainUnprepConfig.json
+python3 main.py config/trainUnprep_doc2vec.json
+python3 main.py config/trainUnprep_tfidf.json
 ```
 
 ### Entrenar modelo (Datos preprocesados)
 ```
-python3 main.py config/trainPrepConfig.json
+python3 main.py config/trainPrep_doc2vec.json
+python3 main.py config/trainPrep_tfidf.json
 ```
 
 ### Realizar predicciones (Datos SIN preprocesar)
 ```
-python3 main.py config/testConfig.json
+python3 main.py config/test_doc2vec.json
+python3 main.py config/test_tfidf.json
 ```
 ## Desactivar entorno virtual
 ```
