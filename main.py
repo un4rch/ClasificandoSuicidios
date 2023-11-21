@@ -1,20 +1,43 @@
-# TODO al guardar los embeddings, verificar que se guardan bien, ya que con to_csv creo que se guardan distinto (puede ser una causa de que no haga bien las predicciones)
-# TODO verificar que los valores se predicen bien: https://www.kaggle.com/code/rutujapotdar/suicide-text-classification-nlp#Conclusion
-"""y fotos que deberíamos poner son:
-- un diagrama de barras para comparar los fscores de los métodos de clasificación que utilizamos
+"""
+Preguntas:
+ 1) ¿Cuanto mejora Ensemble Methods (VotingClassifier) las predicciones respecto a usar modelos simples?
+    Pruebas de enseble methods: (una grafica con los fscore de cada prueba)
+    - Un algoritmo de cada tipo
+    - Solo los bayesianos
+    - Solo los arboles: random forest y decision tree
+    - Combinar dos VotingClassifiers (uno de bayesanos y otro de arboles)
+    -
+ 2) Como afecta el ruido a los algoritmos de clasificacion (a las metricas) y como acolchar el impacto
+
+Graficas para la documentacion del poster:
+ - un diagrama de barras para comparar los fscores (o mas metricas relevantes, uno por metrica) de los métodos de clasificación que utilizamos
  - las matrices de confusión de los algoritmos más relevantes de la primera pregunta
-- una representación de que nuestros datos están equilibrados
-- un diagrama de puntos de como afecta el ruido de la 2a pregunta"""
+ - una representación de que nuestros datos están equilibrados
+ - un diagrama de puntos de como afecta el ruido de la 2a pregunta
+ - boxplot datos de entrada (en funcion de la longitud de los textos): antes y despues de filtrar por longitud
+ - ...
+
+Mejoras del algoritmo:
+ - ...
+
+Posibles bugs:
+ - ...
+"""
 
 # Algoritmos: 
 #import ast
 # Warnings
-#import warnings
-#warnings.filterwarnings('ignore')
+import warnings
+warnings.filterwarnings('ignore')
 # System libraries
 import os
 import sys
 import csv
+# Scripting
+#import typer
+#from rich.table import Table
+#from rich.console import Console
+from tabulate import tabulate
 # Visualization libraries
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -22,12 +45,13 @@ import matplotlib.pyplot as plt
 import pandas as pd # frames (tables)
 import numpy as np # linear algebra
 #import string
+import json
 # NLP preprocessing libraries
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from preprocessor import Preprocessor
-#from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 # Data serialization 
 import pickle
 # Classification algorithms
@@ -45,61 +69,144 @@ from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
 import evaluate
 from sklearn import metrics
 
-preprocessedFile = "Preprocessed_Suicide_Detection.csv" # None
-unpreprocessedFile = "Suicide_Detection.csv"
-guardarPreproceso = "Preprocessed_Suicide_Detection.csv"
-output_dir = "output"
-train = True
-visualization = False
-textLengthsFilter = 10000 # Se eliminan los textos cuya longitud sea mas de 10000 caracteres
-histogramIntervals = 500
-pca_dimensions = 200
-doc2vec_vectors_size = 1500
-doc2vec_model = "Suicide_Detection_doc2vec.model"
-pca_model = "Suicide_Detection_pca.model"
-prediction_model = "EnsembleMethods_model.pkl"
+preprocessedFile = None
+unpreprocessedFile = None
+guardarPreproceso = None
+output_dir = None
+train = None
+visualization = None
+textLengthsFilter = None
+histogramIntervals = None
+preprocessType = None # doc2vec,tf-idf
+pca_dimensions = None
+doc2vec_vectors_size = None
+doc2vec_model = None
+pca_model = None
+tf_idf_model = None
+prediction_model = None
+max_num_samples = None
+
+def printPredictionsTable(predictionsDict):
+    # expected input: [["text1", "prediction"], ["text2", "prediction"], ...]
+    print (tabulate(predictionsDict, headers=["Original Text", "Prediction"], tablefmt="simple_outline"))
+
+def inicializarPrograma(configFile):
+    with open(configFile, "r") as file:
+        data = json.load(file)
+        file.close()
+    global preprocessedFile
+    preprocessedFile = data['preprocessedFile']
+    global unpreprocessedFile
+    unpreprocessedFile = data['unpreprocessedFile']
+    global guardarPreproceso
+    guardarPreproceso = data['guardarPreproceso']
+    global output_dir
+    output_dir = data['output_dir']
+    global train
+    train = data['train']
+    global visualization
+    visualization = data['visualization']
+    global textLengthsFilter
+    textLengthsFilter = data['textLengthsFilter']
+    global histogramIntervals
+    histogramIntervals = data['histogramIntervals']
+    global preprocessType
+    preprocessType = data['preprocessType']
+    global pca_dimensions
+    pca_dimensions = data['pca_dimensions']
+    global doc2vec_vectors_size
+    doc2vec_vectors_size = data['doc2vec_vectors_size']
+    global doc2vec_model
+    doc2vec_model = data['doc2vec_model']
+    global pca_model
+    pca_model = data['pca_model']
+    global tf_idf_model
+    tf_idf_model = data['tf_idf_model']
+    global prediction_model
+    prediction_model = data['prediction_model']
+    global max_num_samples
+    max_num_samples = data['max_num_samples']
+    
 
 def cargarDataset(pFileName):
     # Cargar los datos
-    df_tmp = pd.read_csv(pFileName)
+    df= pd.read_csv(pFileName)
     # Coger solo las columnas que nos interesan
-    df = pd.DataFrame()
-    df['text'] = df_tmp['text']
-    df['class'] = df_tmp['class']
+    #df = pd.DataFrame()
+    #df['text'] = df_tmp['text']
+    #df['class'] = df_tmp['class']
     return df
 
-def preprocesado(dataFrame, doc2vec_model, pca_model):
-    if df.shape[0] > 1000:
-        # Obtener 10000 instancias
-        dataFrame = dataFrame.sample(n=10000, random_state=42)
+def preprocesarNLP(pdColumn):
+    pdColumn= pdColumn.str.lower()
+    pdColumn = pdColumn.str.replace(r'[^\w\s\d+]+', '',regex = True)
+    stop_words = stopwords.words('english')
+    pdColumn = pdColumn.apply(lambda x: ' '.join([word for word in x.split() if word not in (stop_words)]))
+    pdColumn = pdColumn.apply(lambda x:nltk.word_tokenize(x))
+    ps = PorterStemmer()
+    pdColumn = pdColumn.apply(lambda x : [ps.stem(i) for i in x])
+    pdColumn=pdColumn.apply(lambda x : ' '.join(x))
+    pdColumn.dropna(inplace=True)
+    return pdColumn
+def preprocesado(dataFrame, doc2vec_model, pca_model, tfIdf_model):
+    if max_num_samples:
+        if df.shape[0] > max_num_samples:
+            dataFrame = dataFrame.sample(n=max_num_samples, random_state=42)
     # Filtrar textos por longitud usando un umbral
-    dataFrame = dataFrame[dataFrame['text_length']<=textLengthsFilter]
+    if textLengthsFilter:
+        dataFrame['text_length'] = dataFrame['text'].apply(len)
+        dataFrame = dataFrame[dataFrame['text_length']<=textLengthsFilter]
     # Preprocesamos los datos
+    x_prep = None
+    y_prep = None
     preprocessor = Preprocessor()
-    x_prep,y_prep,doc2vec_model,pca_model = preprocessor.doc2vec(dataFrame['text'], dataFrame['class'], pca_dimensions=pca_dimensions, doc2vec_vectors_size=doc2vec_vectors_size, doc2vec_model=doc2vec_model, pca_model=pca_model)
-    # Convertir de np.array a tuplas
-    x_prep = [tuple(point) for point in x_prep.tolist()]
-    # Guardar el preproceso
-    if guardarPreproceso != None:
-            #dataFrame.to_csv(guardarPreproceso) #¿¿¿por que al guardar asi se guardan distinto???
-            # Guardar datos preprocesados
-            with open(guardarPreproceso, "w") as file:
-                writer = csv.writer(file)
-                writer.writerow(["text","class"])
-                for idx,point in enumerate(x_prep):
-                    writer.writerow([point,y_prep[idx]])
+    if preprocessType == "doc2vec":
+        x_prep,y_prep,doc2vec_model,pca_model = preprocessor.doc2vec(dataFrame['text'], dataFrame['class'], pca_dimensions=pca_dimensions, doc2vec_vectors_size=doc2vec_vectors_size, doc2vec_model=doc2vec_model, pca_model=pca_model)
+        # Convertir de np.array a tuplas
+        x_prep = [tuple(point) for point in x_prep.tolist()]
+        # Guardar el preproceso en el dataFrame
+        dataFrame['text'] = x_prep
+        dataFrame['class'] = y_prep
+        if train and guardarPreproceso:
+            # Guardar los modelos de d0c2vec y pca
+            doc2vec_model.save(unpreprocessedFile.split(".")[0]+"_doc2vec.model")
+            with open(unpreprocessedFile.split(".")[0]+"_pca.model", "wb") as file:
+                pickle.dump(pca_model, file)
+            print(f"    Fichero guardado: {unpreprocessedFile.split('.')[0]+'_doc2vec.model'}")
+            print(f"    Fichero guardado: {unpreprocessedFile.split('.')[0]+'_pca.model'}")
+            if guardarPreproceso != None:
+                dataFrame.to_csv(guardarPreproceso, index=False)
+                print(f"    Fichero guardado: {guardarPreproceso}")
+    elif preprocessType == "tf-idf":
+        # Preprocesar lenguaje natural
+        dataFrame['text'] = preprocesarNLP(dataFrame['text'])
+        if not tfIdf_model:
+            vectorizer = TfidfVectorizer(min_df=50,max_features=5000)
+            tfidf_matrix =  vectorizer.fit_transform(dataFrame['text']).toarray()
+            x_prep = pd.DataFrame(tfidf_matrix, columns=vectorizer.get_feature_names_out())
+            x_prep = x_prep.drop("class", axis=1)
+            y_prep = np.asarray(dataFrame['class'])
+            # Si no se hace copy se trata como un puntero y luego x_prep tendra la columna "class"
+            dataFrame = x_prep.copy()
+            dataFrame['class'] = y_prep
+        else:
+            with open(tfIdf_model, "rb") as file:
+                vectorizer_vocabulary = pickle.load(file)
+            vectorizer = TfidfVectorizer(vocabulary=vectorizer_vocabulary)
+            x_prep =  vectorizer.fit_transform(dataFrame['text']).toarray()
+            x_prep = pd.DataFrame(x_prep, columns=vectorizer.get_feature_names_out())
+            x_prep = x_prep.drop("class", axis=1)
+            y_prep = np.asarray(dataFrame['class'])
+            #dataFrame = x_prep
+            #dataFrame['class'] = y_prep
+        if train and guardarPreproceso:
+            with open(unpreprocessedFile.split(".")[0]+"_tf_idf.model", 'wb') as f:
+                pickle.dump(vectorizer.vocabulary_, f) 
+            print(f"    Fichero guardado: {unpreprocessedFile.split('.')[0]+'_tf_idf.model'}")
+            dataFrame.to_csv(guardarPreproceso, index=False)
             print(f"    Fichero guardado: {guardarPreproceso}")
-            if train:
-                # Guardar los modelos de d0c2vec y pca
-                doc2vec_model.save(unpreprocessedFile.split(".")[0]+"_doc2vec.model")
-                with open(unpreprocessedFile.split(".")[0]+"_pca.model", "wb") as file:
-                    pickle.dump(pca_model, file)
-                print(f"    Fichero guardado: {unpreprocessedFile.split('.')[0]+'_doc2vec.model'}")
-                print(f"    Fichero guardado: {unpreprocessedFile.split('.')[0]+'_pca.model'}")
-    # Devolvemos el dataFrame preprocesado
-    dataFrame['text'] = x_prep
-    dataFrame['class'] = y_prep
-    return dataFrame
+    # Guardar el preproceso de los datos
+    return x_prep, y_prep
 
 def histogramTextsLengths(dataFrame, fileName):
     # Create a histogram with intervals of 500
@@ -126,13 +233,13 @@ def boxplotTextLengths(dataFrame, fileName):
     print(f"    Fichero guardado: {output_dir}/{fileName}")
 
 def visualizeBalanced(dataFrame, fileName):
-    classCnt = df['class'].value_counts()
+    classCnt = dataFrame['class'].value_counts()
     #print(classCnt)
 
     plt.figure(figsize=((20,5)))
 
     plt.subplot(1,2,1)
-    sns.countplot(df,x='class')
+    sns.countplot(dataFrame,x='class')
 
     plt.subplot(1,2,2)
     plt.pie(classCnt,labels = classCnt.index,autopct='%.0f%%')
@@ -152,67 +259,88 @@ def saveConfussionMatrix(confussion_matrix, dType, fileName, cmap):
     print(f"    Fichero guardado: {output_dir}/{fileName}")
 
 if __name__ == "__main__":
-    # Cargar dataset sin preprocesar
-    df = cargarDataset(unpreprocessedFile)
-    # Calcular una columna que contenga las longitudes de los textos (sirve para el preprocesado)
-    df['text_length'] = df['text'].apply(len)
-    # Eliminar si ha quedado algun valor vacio al cargar el dataset
-    df.dropna(inplace=True)
+    # Inicializar las variables del programa
+    inicializarPrograma(sys.argv[1])
     # Crear directorio donde se van a guardar las graficas y ficheros generados
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    if visualization:
+    print("[*] Cargarndo datos...")
+    # Preprocesar datos
+    if not preprocessedFile:
+        # Cargar dataset sin preprocesar
+        df = cargarDataset(unpreprocessedFile)
+        # Calcular una columna que contenga las longitudes de los textos (sirve para el preprocesado)
+        print("[*] Preprocesando datos...")
+        x_prep, y_prep = preprocesado(df, doc2vec_model, pca_model, tf_idf_model)
+        data = x_prep
+        labels = y_prep
+
+    else:
+        df = cargarDataset(preprocessedFile)
+        df.dropna(inplace=True)
+        data = df['text']
+        labels = df["class"]
+    
+    # Adaptar el formato de los datos para cada tipo de preprocesado
+    if preprocessType == "doc2vec":
+        try:
+            data = [eval(embedding) for embedding in data]
+        except:
+            data = [tuple(embedding) for embedding in data]
+    elif preprocessType == "tf-idf":
+        data = [row for idx,row in data.iterrows()]
+
+    # Mostrar error si los datos de df son embeddings y no los textos originales
+    if visualization and preprocessedFile:
+        print("[!] Error para visualizar los datos de entrada, los datos no deben estar preprocesados")
+        sys.exit(1)
+    if visualization and not preprocessedFile:
+        # Eliminar si ha quedado algun valor vacio al cargar el dataset
+        df.dropna(inplace=True)
         print("[*] Generando graficas de visualizacion de los datos...")
         # Visualizar si los datos estan balanceados
-        visualizeBalanced(df, "check_balanced.png")
+        visualizeBalanced(df, "check_balanced_before_filter.png")
         # Generar un histograma que muestra en numero de instancias que tienen cierta cantidad de letras por intervalos
         histogramTextsLengths(df, "text_lengths_histogram_afer_before.png")
         # Generar un boxplot que represente las longitudes de los datos de entrada
         boxplotTextLengths(df, "text_lengths_boxplot_before_cleaning.png")
         # Filtrar textos por longitud usando un umbral
         df = df[df['text_length']<=textLengthsFilter]
+        # Visualizar si los datos estan balanceados despues de filtrar
+        visualizeBalanced(df, "check_balanced_after_filter.png")
         # Volver a generar un histograma con el filtrado hecho
         histogramTextsLengths(df, "text_lengths_histogram_afer_cleaning.png")
         # Volver a generar un boxplot con el filtrado hecho
         boxplotTextLengths(df, "text_lengths_boxplot_after_cleaning.png")
         # Coger los textos y las etiquetas
-    # Preprocesar datos
-    if not preprocessedFile:
-        print("[*] Preprocesando datos...")
-        df = preprocesado(df, doc2vec_model, pca_model)
-        embeddings = [point for point in df['text']]
-        labels = np.asarray(df['class'])
-    else:
-        df = cargarDataset(preprocessedFile)
-        # Eliminar \n para cargar los embeddings si los hay
-        df['text'] = df['text'].replace('\n', '', regex=True)
-        # Cargar los datos preprocesados en arrays
-        embeddings = [eval(point) for point in df['text']]
-        labels = np.asarray(df['class'])
 
     if not train:
         # TODO: arreglar predicciones
         df_original = cargarDataset(unpreprocessedFile)
         print("[*] Realizando prediciones...")
+        print()
         with open(prediction_model, "rb") as file:
             model = pickle.load(file)
-        for idx,text in enumerate(df['text']):
-            print(f"Text: {df_original['text'][idx]}")
-            print(f"preficted: {model.predict([text])[0]}")
-            print()
+        predictionsTable = []
+        for idx,embedded_text in enumerate(data):
+            original_text = df_original['text'][idx]
+            prediction = model.predict([embedded_text])[0]
+            predictionsTable.append([original_text, prediction])
+        printPredictionsTable(predictionsTable)
         fileName = "predicted.csv"
         with open(f"{output_dir}/{fileName}", "w") as file:
             writer = csv.writer(file)
             writer.writerow(["text","class"])
-            for idx,text in enumerate(df['text']):
+            for idx,text in enumerate(data):
                 original_text = df_original['text'][idx]
                 writer.writerow([original_text,model.predict([text])[0]])
+        print()
         print(f"    Fichero guardado: {output_dir}/{fileName}")
         sys.exit(0)
 
-    print("[*] Entrenando modelos...")        
+    print("[*] Entrenando modelos...")
     # Separar dataset en entrenamiento y pruebas
-    X_train,X_test,y_train,y_test = train_test_split(embeddings,labels,test_size=0.2,random_state=42)
+    X_train,X_test,y_train,y_test = train_test_split(data,labels,test_size=0.2,random_state=42)
 
     # Guardar los scores de cada modelo de clasificacion en un array
     classification_scores = [] # (nombreClasificador, modelo, training_score, testing_score)
@@ -233,16 +361,17 @@ if __name__ == "__main__":
     print(f"\t\t\tMultinomialNB")
     print(f"{24*'-'}--------------{24*'-'}")
     mnb = MultinomialNB()
-    correccion = 5 # El valor mas negativo suele oscilar alrededor del 4, 5 nos asegura que es mayor
-    X_train2 = [[x + correccion for x in vector] for vector in X_train]
-    X_test2 = [[x + correccion for x in vector] for vector in X_test]
-    mnb.fit(X_train2, y_train)
-    y_pred = mnb.predict(X_test2)
+    if preprocessType == "doc2vec":
+        correccion = 10 # El valor mas negativo suele oscilar alrededor del 4, 5 nos asegura que es mayor
+        X_train = [[x + correccion for x in vector] for vector in X_train]
+        X_test = [[x + correccion for x in vector] for vector in X_test]
+    mnb.fit(X_train, y_train)
+    y_pred = mnb.predict(X_test)
     cm = confusion_matrix(y_test,y_pred)
     print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_multinomialNB.png", cmap='summer')
     print()
-    classification_scores.append(("MultinomialNB", mnb, mnb.score(X_train2,y_train), mnb.score(X_test2,y_test)))
+    classification_scores.append(("MultinomialNB", mnb, mnb.score(X_train,y_train), mnb.score(X_test,y_test)))
     
     # Clasificacion BernoulliNB
     print(f"\t\t\tBernoulliNB")
@@ -311,19 +440,18 @@ if __name__ == "__main__":
     classification_scores.append(("EnsembleMethods", ensemble_model,ensemble_model.score(X_train,y_train), ensemble_model.score(X_test,y_test)))
 
     # Guardar el modelo con mejor score
-    print("[*] Guardando el mejor modelo")
+    print("[*] Guardando el mejor modelo...")
     bestModel = None
     bestScore = 0
     for clasifier,modelo,train_score,test_score in classification_scores:
         score = (train_score+test_score)/2
         if score >= bestScore:
             bestModel = modelo
-    fileName = f"{clasifier}_model.pkl"
+    fileName = f"{clasifier}_model_{preprocessType}.pkl"
     with open(fileName, "wb") as file:
         pickle.dump(bestModel, file)
     print(f"    Mejor modelo: {clasifier}")
     print(f"    Fichero guardado: {fileName}")
-
 
     """
     # Buscar el modelo con mejores hyperparametros:
