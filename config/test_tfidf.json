@@ -1,0 +1,18 @@
+{
+    "preprocessedFile": null,
+    "unpreprocessedFile": "predict.csv",
+    "guardarPreproceso": null,
+    "output_dir": "output",
+    "train": false,
+    "visualization": false,
+    "textLengthsFilter": null,
+    "histogramIntervals": null,
+    "preprocessType": "tf-idf",
+    "pca_dimensions": null,
+    "doc2vec_vectors_size": null,
+    "doc2vec_model": null,
+    "pca_model": null,
+    "tf_idf_model": "Suicide_Detection_tf_idf.model",
+    "prediction_model": "EnsembleMethods_model_tf-idf.pkl",
+    "max_num_samples": null
+}

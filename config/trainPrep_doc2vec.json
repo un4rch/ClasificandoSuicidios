@@ -1,0 +1,18 @@
+{
+    "preprocessedFile": "Preprocessed_Suicide_Detection_doc2vec.csv",
+    "unpreprocessedFile": null,
+    "guardarPreproceso": null,
+    "output_dir": "output",
+    "train": true,
+    "visualization": false,
+    "textLengthsFilter": null,
+    "histogramIntervals": null,
+    "preprocessType": "doc2vec",
+    "pca_dimensions": null,
+    "doc2vec_vectors_size": null,
+    "doc2vec_model": null,
+    "pca_model": null,
+    "tf_idf_model": null,
+    "prediction_model": null,
+    "max_num_samples": null
+}
