@@ -68,6 +68,7 @@ from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
 # Evaluation metrics
 import evaluate
 from sklearn import metrics
+from sklearn.metrics import f1_score
 
 preprocessedFile = None
 unpreprocessedFile = None
@@ -258,6 +259,40 @@ def saveConfussionMatrix(confussion_matrix, dType, fileName, cmap):
     plt.close()
     print(f"    Fichero guardado: {output_dir}/{fileName}")
 
+def visualizarDatosEntrada(dataFrame):
+        def visualizarGraficas(dataFrame, filtro):
+            # Visualizar si los datos estan balanceados despues de filtrar
+            visualizeBalanced(dataFrame, f"check_balanced_{filtro}_filter.png")
+            # Volver a generar un histograma con el filtrado hecho
+            histogramTextsLengths(dataFrame, f"text_lengths_histogram_{filtro}_cleaning.png")
+            # Volver a generar un boxplot con el filtrado hecho
+            boxplotTextLengths(dataFrame, f"text_lengths_boxplot_{filtro}_cleaning.png")
+        # Mostrar error si los datos de df son embeddings y no los textos originales
+        if preprocessedFile:
+            print("[!] Error para visualizar los datos de entrada, los datos no deben estar preprocesados")
+            sys.exit(1)
+        # Calcular una columna de longitudes de textos    
+        dataFrame['text_length'] = dataFrame['text'].apply(len)
+        # Generar graficas
+        print("[*] Generando graficas de visualizacion de los datos...")
+        # Sin hacer ningun filtro
+        visualizarGraficas(dataFrame, 0)
+        # Filtrar textos por longitud usando un umbral
+        dataFrame = dataFrame[dataFrame['text_length']<=textLengthsFilter]
+        visualizarGraficas(dataFrame, textLengthsFilter)
+
+def barClassifiersFScores(classifierNames, classifierScores, fileName):
+    plt.figure(figsize =(10, 7))
+    plt.bar(classifierNames, classifierScores, color="Blue", width=0.8)
+    for modelName,modelScore in zip(classifierNames, classifierScores):
+        plt.text(modelName, modelScore, ("%.4f" % modelScore), fontsize=10, ha='center', va='bottom')
+    plt.xlabel("Classifier")
+    plt.ylabel("F-Score")
+    plt.title("Classifiers f-scores")
+    plt.savefig(f"{output_dir}/{fileName}")
+    plt.close()
+    print(f"    Fichero guardado: {output_dir}/{fileName}")
+
 if __name__ == "__main__":
     # Inicializar las variables del programa
     inicializarPrograma(sys.argv[1])
@@ -269,14 +304,19 @@ if __name__ == "__main__":
     if not preprocessedFile:
         # Cargar dataset sin preprocesar
         df = cargarDataset(unpreprocessedFile)
+        # Eliminar si ha quedado algun valor vacio al cargar el dataset
+        df.dropna(inplace=True)
+        # Visualizar datos de entrada
+        if visualization:
+            visualizarDatosEntrada(df)
         # Calcular una columna que contenga las longitudes de los textos (sirve para el preprocesado)
         print("[*] Preprocesando datos...")
         x_prep, y_prep = preprocesado(df, doc2vec_model, pca_model, tf_idf_model)
         data = x_prep
         labels = y_prep
-
     else:
         df = cargarDataset(preprocessedFile)
+        # Eliminar si ha quedado algun valor vacio al cargar el dataset
         df.dropna(inplace=True)
         data = df['text']
         labels = df["class"]
@@ -290,32 +330,7 @@ if __name__ == "__main__":
     elif preprocessType == "tf-idf":
         data = [row for idx,row in data.iterrows()]
 
-    # Mostrar error si los datos de df son embeddings y no los textos originales
-    if visualization and preprocessedFile:
-        print("[!] Error para visualizar los datos de entrada, los datos no deben estar preprocesados")
-        sys.exit(1)
-    if visualization and not preprocessedFile:
-        # Eliminar si ha quedado algun valor vacio al cargar el dataset
-        df.dropna(inplace=True)
-        print("[*] Generando graficas de visualizacion de los datos...")
-        # Visualizar si los datos estan balanceados
-        visualizeBalanced(df, "check_balanced_before_filter.png")
-        # Generar un histograma que muestra en numero de instancias que tienen cierta cantidad de letras por intervalos
-        histogramTextsLengths(df, "text_lengths_histogram_afer_before.png")
-        # Generar un boxplot que represente las longitudes de los datos de entrada
-        boxplotTextLengths(df, "text_lengths_boxplot_before_cleaning.png")
-        # Filtrar textos por longitud usando un umbral
-        df = df[df['text_length']<=textLengthsFilter]
-        # Visualizar si los datos estan balanceados despues de filtrar
-        visualizeBalanced(df, "check_balanced_after_filter.png")
-        # Volver a generar un histograma con el filtrado hecho
-        histogramTextsLengths(df, "text_lengths_histogram_afer_cleaning.png")
-        # Volver a generar un boxplot con el filtrado hecho
-        boxplotTextLengths(df, "text_lengths_boxplot_after_cleaning.png")
-        # Coger los textos y las etiquetas
-
     if not train:
-        # TODO: arreglar predicciones
         df_original = cargarDataset(unpreprocessedFile)
         print("[*] Realizando prediciones...")
         print()
@@ -355,7 +370,8 @@ if __name__ == "__main__":
     print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_gaussianNB.png", cmap='summer')
     print()
-    classification_scores.append(("GaussianNB", gnb, gnb.score(X_train,y_train), gnb.score(X_test,y_test)))
+    #classification_scores.append(("GaussianNB", gnb, gnb.score(X_train,y_train), gnb.score(X_test,y_test)))
+    classification_scores.append(("GaussianNB", gnb, f1_score(y_test, y_pred, average='weighted')))
 
     # Clasificacion MultinomialNB
     print(f"\t\t\tMultinomialNB")
@@ -371,7 +387,8 @@ if __name__ == "__main__":
     print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_multinomialNB.png", cmap='summer')
     print()
-    classification_scores.append(("MultinomialNB", mnb, mnb.score(X_train,y_train), mnb.score(X_test,y_test)))
+    #classification_scores.append(("MultinomialNB", mnb, mnb.score(X_train,y_train), mnb.score(X_test,y_test)))
+    classification_scores.append(("MultinomialNB", mnb, f1_score(y_test, y_pred, average='weighted')))
     
     # Clasificacion BernoulliNB
     print(f"\t\t\tBernoulliNB")
@@ -383,7 +400,8 @@ if __name__ == "__main__":
     print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_binomialNB.png", cmap='summer')
     print()
-    classification_scores.append(("BernoulliNB", bnb, bnb.score(X_train,y_train), bnb.score(X_test,y_test)))
+    #classification_scores.append(("BernoulliNB", bnb, bnb.score(X_train,y_train), bnb.score(X_test,y_test)))
+    classification_scores.append(("BernoulliNB", bnb, f1_score(y_test, y_pred, average='weighted')))
 
     # Clsificacion Random Forest
     print(f"\t\t\tRandomForest")
@@ -394,13 +412,13 @@ if __name__ == "__main__":
     #print('Training score:',rfc.score(X_train, y_train))
     #print('Testing score:',rfc.score(X_test,y_test))
     print(rfc.best_estimator_)
-    y_act=y_test
     y_pred=rfc.predict(X_test)
-    cm = confusion_matrix(y_act,y_pred)
-    print(classification_report(y_act,y_pred))
+    cm = confusion_matrix(y_test,y_pred)
+    print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_RandomForest.png", cmap='Spectral')
     print()
-    classification_scores.append(("RandomForest", rfc, rfc.score(X_train,y_train), rfc.score(X_test,y_test)))
+    #classification_scores.append(("RandomForest", rfc, rfc.score(X_train,y_train), rfc.score(X_test,y_test)))
+    classification_scores.append(("RandomForest", rfc, f1_score(y_test, y_pred, average='weighted')))
 
     # Clsificacion Decision Tree
     print(f"\t\t\tDecisionTree")
@@ -409,13 +427,13 @@ if __name__ == "__main__":
     dtc.fit(X_train, y_train)
     #print(model2.score(X_train, y_train))
     #print(model2.score(X_test,y_test))
-    y_act=y_test
     y_pred=dtc.predict(X_test)
-    cm = confusion_matrix(y_act,y_pred)
-    print(classification_report(y_act,y_pred))
+    cm = confusion_matrix(y_test,y_pred)
+    print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_DecisionTree.png", cmap='PiYG')
     print()
-    classification_scores.append(("DecisionTree", dtc, dtc.score(X_train,y_train), dtc.score(X_test,y_test)))
+    #classification_scores.append(("DecisionTree", dtc, dtc.score(X_train,y_train), dtc.score(X_test,y_test)))
+    classification_scores.append(("DecisionTree", dtc, f1_score(y_test, y_pred, average='weighted')))
 
     # TODO Meter mas modelos de prediccion
 
@@ -433,24 +451,25 @@ if __name__ == "__main__":
     ensemble_model.fit(X_train, y_train)
     # Make predictions on the test set
     y_pred = ensemble_model.predict(X_test)
-    cm = confusion_matrix(y_act,y_pred)
-    print(classification_report(y_act,y_pred))
+    cm = confusion_matrix(y_test,y_pred)
+    print(classification_report(y_test,y_pred))
     saveConfussionMatrix(cm, "d", "confussion_matrix_EnsembleMethods.png", cmap='PiYG')
     print()
-    classification_scores.append(("EnsembleMethods", ensemble_model,ensemble_model.score(X_train,y_train), ensemble_model.score(X_test,y_test)))
+    #classification_scores.append(("EnsembleMethods", ensemble_model, ensemble_model.score(X_train,y_train), ensemble_model.score(X_test,y_test)))
+    classification_scores.append(("EnsembleMethods", ensemble_model, f1_score(y_test, y_pred, average='weighted')))
 
-    # Guardar el modelo con mejor score
+    # Generar un grafico de barras con los fscores de cada clasificador
+    classifiers = [classifier_score[0] for classifier_score in classification_scores]
+    scores = [classifier_score[2] for classifier_score in classification_scores]
+    barClassifiersFScores(classifiers, scores, "classifiers_fscores.png")
+
+    # Guardar el modelo con mejor fscore
     print("[*] Guardando el mejor modelo...")
-    bestModel = None
-    bestScore = 0
-    for clasifier,modelo,train_score,test_score in classification_scores:
-        score = (train_score+test_score)/2
-        if score >= bestScore:
-            bestModel = modelo
-    fileName = f"{clasifier}_model_{preprocessType}.pkl"
+    classifier,bestModel,fscore = max(classification_scores, key =  lambda i : i[2])
+    fileName = f"{classifier}_model_{preprocessType}.pkl"
     with open(fileName, "wb") as file:
         pickle.dump(bestModel, file)
-    print(f"    Mejor modelo: {clasifier}")
+    print(f"    Mejor modelo: {classifier}")
     print(f"    Fichero guardado: {fileName}")
 
     """
