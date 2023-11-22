@@ -4,7 +4,7 @@
     "guardarPreproceso": "Preprocessed_Suicide_Detection_tfidf.csv",
     "output_dir": "output",
     "train": true,
-    "visualization": false,
+    "visualization": true,
     "textLengthsFilter": 10000,
     "histogramIntervals": 500,
     "preprocessType": "tf-idf",
