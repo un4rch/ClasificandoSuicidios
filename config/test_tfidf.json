@@ -13,6 +13,6 @@
     "doc2vec_model": null,
     "pca_model": null,
     "tf_idf_model": "Suicide_Detection_tf_idf.model",
-    "prediction_model": "EnsembleMethods_model_tf-idf.pkl",
+    "prediction_model": "MultinomialNB_model_tf-idf.pkl",
     "max_num_samples": null
 }
