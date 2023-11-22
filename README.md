@@ -35,22 +35,22 @@ python3 main.py config/test_tfidf.json   # Usar tf-idf
 2. Copiar el siguiente contenido y configurar las variables
 ```
 {
-    "preprocessedFile": null, # str
-    "unpreprocessedFile": null, # str
-    "guardarPreproceso": null, # str
-    "output_dir": null, # str
-    "train": null, # true / false
-    "visualization": null, # true / false
-    "textLengthsFilter": null, # int
-    "histogramIntervals": null, # int
-    "preprocessType": null, # "tf-idf" / "doc2vec"
-    "pca_dimensions": null, # int
+    "preprocessedFile": null,     # str
+    "unpreprocessedFile": null,   # str
+    "guardarPreproceso": null,    # str
+    "output_dir": null,           # str
+    "train": null,                # true / false
+    "visualization": null,        # true / false
+    "textLengthsFilter": null,    # int
+    "histogramIntervals": null,   # int
+    "preprocessType": null,       # "tf-idf" / "doc2vec"
+    "pca_dimensions": null,       # int
     "doc2vec_vectors_size": null, # int
-    "doc2vec_model": null, # str
-    "pca_model": null, # str
-    "tf_idf_model": null, # str
-    "prediction_model": null, # str
-    "max_num_samples": null # int
+    "doc2vec_model": null,        # str
+    "pca_model": null,            # str
+    "tf_idf_model": null,         # str
+    "prediction_model": null,     # str
+    "max_num_samples": null       # int
 }
 ```
 3. Ejecujar el siguiente comando:
