@@ -1,0 +1,19 @@
+{
+    "preprocessedFile": null,
+    "unpreprocessedFile": "Suicide_Detection.csv",
+    "guardarPreproceso": "Preprocessed_Suicide_Detection_tfidf.csv",
+    "output_dir": "output",
+    "train": true,
+    "visualization": false,
+    "textLengthsFilter": 10000,
+    "histogramIntervals": 500,
+    "preprocessType": "tf-idf",
+    "pca_dimensions": null,
+    "doc2vec_vectors_size": null,
+    "doc2vec_model": null,
+    "pca_model": null,
+    "tf_idf_model": "Suicide_Detection_tf_idf.model",
+    "prediction_model": "MultinomialNB_model_tf-idf.pkl",
+    "max_num_samples": 20000,
+    "usarRuido": false
+}
