@@ -1,29 +1,3 @@
-"""
-Preguntas:
- 1) ¿Cuanto mejora Ensemble Methods (VotingClassifier) las predicciones respecto a usar modelos simples?
-    Pruebas de enseble methods: (una grafica con los fscore de cada prueba)
-    - Un algoritmo de cada tipo
-    - Solo los bayesianos
-    - Solo los arboles: random forest y decision tree
-    - Combinar dos VotingClassifiers (uno de bayesanos y otro de arboles)
-    -
- 2) Como afecta el ruido a los algoritmos de clasificacion (a las metricas) y como acolchar el impacto
-
-Graficas para la documentacion del poster:
- - un diagrama de barras para comparar los fscores (o mas metricas relevantes, uno por metrica) de los métodos de clasificación que utilizamos
- - las matrices de confusión de los algoritmos más relevantes de la primera pregunta
- - una representación de que nuestros datos están equilibrados
- - un diagrama de puntos de como afecta el ruido de la 2a pregunta
- - boxplot datos de entrada (en funcion de la longitud de los textos): antes y despues de filtrar por longitud
- - ...
-
-Mejoras del algoritmo:
- - ...
-
-Posibles bugs:
- - ...
-"""
-
 # Algoritmos: 
 #import ast
 # Warnings
@@ -52,6 +26,7 @@ from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from preprocessor import Preprocessor
 from sklearn.feature_extraction.text import TfidfVectorizer
+import nlpaug.augmenter.char as textAugmenter
 # Data serialization 
 import pickle
 # Classification algorithms
@@ -86,6 +61,7 @@ pca_model = None
 tf_idf_model = None
 prediction_model = None
 max_num_samples = None
+usarRuido = None
 
 def printPredictionsTable(predictionsDict):
     # expected input: [["text1", "prediction"], ["text2", "prediction"], ...]
@@ -127,6 +103,8 @@ def inicializarPrograma(configFile):
     prediction_model = data['prediction_model']
     global max_num_samples
     max_num_samples = data['max_num_samples']
+    global usarRuido
+    usarRuido = data['usarRuido']
     
 
 def cargarDataset(pFileName):
@@ -150,9 +128,6 @@ def preprocesarNLP(pdColumn):
     pdColumn.dropna(inplace=True)
     return pdColumn
 def preprocesado(dataFrame, doc2vec_model, pca_model, tfIdf_model):
-    if max_num_samples:
-        if df.shape[0] > max_num_samples:
-            dataFrame = dataFrame.sample(n=max_num_samples, random_state=42)
     # Filtrar textos por longitud usando un umbral
     if textLengthsFilter:
         dataFrame['text_length'] = dataFrame['text'].apply(len)
@@ -253,8 +228,8 @@ def saveConfussionMatrix(confussion_matrix, dType, fileName, cmap):
     plt.figure()
     sns.heatmap(confussion_matrix, annot=True, fmt=dType, cmap=cmap)
     plt.title(fileName.split(".")[0])
-    #plt.ylabel("Clusters")
-    #plt.xlabel("Clases")
+    plt.ylabel("Real")
+    plt.xlabel("Predicted")
     plt.savefig(f"{output_dir}/{fileName}", format='png')
     plt.close()
     print(f"    Fichero guardado: {output_dir}/{fileName}")
@@ -265,7 +240,7 @@ def visualizarDatosEntrada(dataFrame):
             visualizeBalanced(dataFrame, f"check_balanced_{filtro}_filter.png")
             # Volver a generar un histograma con el filtrado hecho
             histogramTextsLengths(dataFrame, f"text_lengths_histogram_{filtro}_cleaning.png")
-            # Volver a generar un boxplot con el filtrado hecho
+            # Generar un boxplot en funcion de las longitudes de los textos
             boxplotTextLengths(dataFrame, f"text_lengths_boxplot_{filtro}_cleaning.png")
         # Mostrar error si los datos de df son embeddings y no los textos originales
         if preprocessedFile:
@@ -282,7 +257,7 @@ def visualizarDatosEntrada(dataFrame):
         visualizarGraficas(dataFrame, textLengthsFilter)
 
 def barClassifiersFScores(classifierNames, classifierScores, fileName):
-    plt.figure(figsize =(10, 7))
+    plt.figure(figsize =(18, 7))
     plt.bar(classifierNames, classifierScores, color="Blue", width=0.8)
     for modelName,modelScore in zip(classifierNames, classifierScores):
         plt.text(modelName, modelScore, ("%.4f" % modelScore), fontsize=10, ha='center', va='bottom')
@@ -293,6 +268,105 @@ def barClassifiersFScores(classifierNames, classifierScores, fileName):
     plt.close()
     print(f"    Fichero guardado: {output_dir}/{fileName}")
 
+def evaluarRuido(X_ruido, y_ruido):
+    print("[*] Evaluando ruido...")
+    # Evaluar ruido
+    fileName = "ruido_fscores.png"
+    with open(prediction_model, "rb") as file:
+        model = pickle.load(file)
+    # for con diferentes porcentajes de ruido
+    fscores = []
+    actions = []
+    for actionType in ["substitute", "insert"]:
+        for ruido in [0.05,0.1,0.2,0.25,0.5]:
+            aug = textAugmenter.RandomCharAug(action=actionType, aug_char_p=ruido)
+            X_act = []
+            for texto in X_ruido:
+                X_act.append(aug.augment(texto)[0])
+            dataFrame = pd.DataFrame()
+            dataFrame['text'] = X_act
+            dataFrame['class'] = np.asarray(y_ruido)
+            x_prep, y_prep = preprocesado(dataFrame, doc2vec_model, pca_model, tf_idf_model)
+            X_act = x_prep
+            y_pred = model.predict(X_act)
+            fScore = f1_score(y_prep, y_pred, average='weighted')
+            actions.append(f"{actionType}_{ruido}")
+            fscores.append(fScore)
+    plt.figure(figsize =(15, 7))
+    plt.bar(actions, fscores, color="Blue", width=0.8)
+    for tipoRuido,fScore in zip(actions, fscores):
+        plt.text(tipoRuido, fScore, ("%.4f" % fScore), fontsize=10, ha='center', va='bottom')
+    plt.xlabel("Ruido")
+    plt.ylabel("F-Score")
+    plt.title("Evolucion f-score con diferentes ruidos")
+    plt.savefig(f"{output_dir}/{fileName}")
+    plt.close()
+    print(f"    Fichero guardado: {output_dir}/{fileName}")
+
+def evaluarRuidoGraficoLineas(dataFrame):
+    X_train,X_test,y_train,y_test = train_test_split(dataFrame['text'],dataFrame['class'],test_size=0.2,random_state=42)
+    modelos = [("GaussianNB", GaussianNB()),
+               ("MultinomialNB", MultinomialNB()),
+               ("BernoulliNB", BernoulliNB()),
+               ("RandomForestClassifier", RandomizedSearchCV(RandomForestClassifier(),{'n_estimators':[4,5],'criterion':['entropy'],
+                                                      'max_depth':range(1,4),'min_samples_split':range(2,5)},random_state=12)),
+               ("DecisionTreeClassifier", DecisionTreeClassifier()),
+               ("EnsembleMethods", VotingClassifier(
+                    estimators=[("GaussianNB", GaussianNB()),
+                        ("BernoulliNB", BernoulliNB()),
+                        ("RandomForestClassifier", RandomForestClassifier()),
+                        ("DecisionTreeClassifier", DecisionTreeClassifier())],
+                    voting='soft'  # 'hard' for majority voting, 'soft' for weighted voting based on class probabilities
+                )),
+                ("EnsembleMethodsGaussian", VotingClassifier(
+                    estimators=[("GaussianNB", GaussianNB()),
+                        ("MultinomialNB", MultinomialNB()),
+                        ("BernoulliNB", BernoulliNB()),],
+                    voting='soft'  # 'hard' for majority voting, 'soft' for weighted voting based on class probabilities
+                ))
+    ]
+    plt.figure(figsize=(15,7))
+    actions = []
+    for nombreModelo,modelo in modelos:
+        fscores = []
+        for actionType in ["insert"]:
+            for ruido in [0.05,0.1,0.2,0.25,0.5,0.75]:
+                if f"{actionType}_{ruido}" not in actions:
+                    actions.append(f"{actionType}_{ruido}")
+                print(f"Evaluando: {actionType}_{ruido}_{nombreModelo}")
+                aug = textAugmenter.RandomCharAug(action=actionType, aug_char_p=ruido)
+                X_train_tmp = []
+                for texto in X_train:
+                    X_train_tmp.append(aug.augment(texto)[0])
+                dataFrame_train = pd.DataFrame()
+                dataFrame_train['text'] = X_train_tmp
+                dataFrame_train['class'] = np.asarray(y_train)
+                X_train_ruido, y_train_ruido = preprocesado(dataFrame_train, doc2vec_model, pca_model, tf_idf_model)
+                X_test_tmp = []
+                for texto in X_test:
+                    X_test_tmp.append(aug.augment(texto)[0])
+                dataFrame_test = pd.DataFrame()
+                dataFrame_test['text'] = X_test_tmp
+                dataFrame_test['class'] = np.asarray(y_test)
+                X_test_ruido, y_test_ruido = preprocesado(dataFrame_test, doc2vec_model, pca_model, tf_idf_model)
+                modelo.fit(X_train_ruido, y_train_ruido)
+                y_pred = modelo.predict(X_test_ruido)
+                fscores.append(f1_score(y_test_ruido, y_pred, average='weighted'))
+        plt.plot(actions, fscores, label=nombreModelo)
+    # Agregar etiquetas y título
+    plt.xlabel('Ruido')
+    plt.ylabel('F-score')
+    plt.title('Ruido con diferentes modelos de prediccion')
+    # Agregar leyenda
+    plt.legend()
+    # Mostrar el gráfico
+    fileName = "ruidoModelos.png"
+    plt.savefig(f"{output_dir}/{fileName}")
+    plt.close()
+    print(f"Imagen guardada: {output_dir}/{fileName}")
+    
+
+
 if __name__ == "__main__":
     # Inicializar las variables del programa
     inicializarPrograma(sys.argv[1])
@@ -300,35 +374,79 @@ if __name__ == "__main__":
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     print("[*] Cargarndo datos...")
+    
     # Preprocesar datos
     if not preprocessedFile:
         # Cargar dataset sin preprocesar
         df = cargarDataset(unpreprocessedFile)
         # Eliminar si ha quedado algun valor vacio al cargar el dataset
         df.dropna(inplace=True)
+        # Coger un subconjunto de datos
+        if max_num_samples:
+            if df.shape[0] > max_num_samples:
+                df = df.sample(n=max_num_samples, random_state=42)
         # Visualizar datos de entrada
         if visualization:
+            if usarRuido:
+                # Evaluar ruido para diferentes modelos de prediccion
+                print("[*] Evaluando ruido para diferentes modelos de clasificacion...")
+                gptmp = guardarPreproceso
+                guardarPreproceso = False
+                evaluarRuidoGraficoLineas(df)
+                guardarPreproceso = gptmp
+            # Separar dataset en entrenamiento y pruebas
+            X_train,X_test,y_train,y_test = train_test_split(df['text'],df['class'],test_size=0.2,random_state=42)
+            df_train = pd.DataFrame()
+            df_train['text'] = X_train
+            df_train['class'] = y_train
+            df_test = pd.DataFrame()
+            df_test['text'] = X_test
+            df_test['class'] = y_test
+            df_tn = df_train.copy()
+            df_tt = df_test.copy()
             visualizarDatosEntrada(df)
+            df_tn['text_length'] = df_tn['text'].apply(len)
+            df_tn = df_tn[df_tn['text_length']<=2000]
+            df_tt['text_length'] = df_tt['text'].apply(len)
+            df_tt = df_tt[df_tt['text_length']<=2000]
+            boxplotTextLengths(df_tt, f"text_lengths_boxplot_{2000}_train.png")
+            boxplotTextLengths(df_tn, f"text_lengths_boxplot_{2000}_test.png")
+            if usarRuido:
+                df = df.sample(n=max_num_samples, random_state=42)
+                X_temp,X_ruido,y_temp,y_ruido = train_test_split(df["text"],df['class'],test_size=0.5,random_state=42)
+                guardarPreproceso = False
+                evaluarRuido(X_ruido, y_ruido)
+                guardarPreproceso = True
+                df = pd.DataFrame()
+                df['text'] = X_temp
+                df['class'] = y_temp
         # Calcular una columna que contenga las longitudes de los textos (sirve para el preprocesado)
         print("[*] Preprocesando datos...")
         x_prep, y_prep = preprocesado(df, doc2vec_model, pca_model, tf_idf_model)
-        data = x_prep
-        labels = y_prep
+        X_train,X_test,y_train,y_test = train_test_split(x_prep,y_prep,test_size=0.2,random_state=42)
+        #x_prep, y_prep = preprocesado(df, doc2vec_model, pca_model, tf_idf_model)
+        #data = x_prep
+        #labels = y_prep
     else:
         df = cargarDataset(preprocessedFile)
         # Eliminar si ha quedado algun valor vacio al cargar el dataset
         df.dropna(inplace=True)
         data = df['text']
         labels = df["class"]
+        # Separar dataset en entrenamiento y pruebas
+        X_train,X_test,y_train,y_test = train_test_split(data,labels,test_size=0.2,random_state=42)
     
     # Adaptar el formato de los datos para cada tipo de preprocesado
     if preprocessType == "doc2vec":
         try:
-            data = [eval(embedding) for embedding in data]
+            X_train = [eval(embedding) for embedding in X_train]
+            X_test = [eval(embedding) for embedding in X_test]
         except:
-            data = [tuple(embedding) for embedding in data]
+            X_train = [tuple(embedding) for embedding in X_train]
+            X_test = [tuple(embedding) for embedding in X_test]
     elif preprocessType == "tf-idf":
-        data = [row for idx,row in data.iterrows()]
+        X_train = [row for idx,row in X_train.iterrows()]
+        X_test = [row for idx,row in X_test.iterrows()]
 
     if not train:
         df_original = cargarDataset(unpreprocessedFile)
@@ -354,9 +472,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     print("[*] Entrenando modelos...")
-    # Separar dataset en entrenamiento y pruebas
-    X_train,X_test,y_train,y_test = train_test_split(data,labels,test_size=0.2,random_state=42)
-
+    
     # Guardar los scores de cada modelo de clasificacion en un array
     classification_scores = [] # (nombreClasificador, modelo, training_score, testing_score)
 
@@ -437,7 +553,7 @@ if __name__ == "__main__":
 
     # TODO Meter mas modelos de prediccion
 
-    # Clasificacion usando Ensemble Methods
+    # Clasificacion usando Ensemble Methods general
     print(f"\t\t\tEnsembleMethods")
     print(f"{24*'-'}--------------{24*'-'}")
     ensemble_model = VotingClassifier(
@@ -458,9 +574,30 @@ if __name__ == "__main__":
     #classification_scores.append(("EnsembleMethods", ensemble_model, ensemble_model.score(X_train,y_train), ensemble_model.score(X_test,y_test)))
     classification_scores.append(("EnsembleMethods", ensemble_model, f1_score(y_test, y_pred, average='weighted')))
 
+    # Clasificacion usando Ensemble Methods bayesianos
+    print(f"\t\t\tEnsembleMethodsGaussian")
+    print(f"{24*'-'}--------------{24*'-'}")
+    ensemble_model = VotingClassifier(
+        estimators=[("GaussianNB", GaussianNB()),
+                    ("MultinomialNB", MultinomialNB()),
+                    ("BernoulliNB", BernoulliNB()),],
+        voting='soft'  # 'hard' for majority voting, 'soft' for weighted voting based on class probabilities
+    )
+    # Fit the ensemble model on the training data
+    ensemble_model.fit(X_train, y_train)
+    # Make predictions on the test set
+    y_pred = ensemble_model.predict(X_test)
+    cm = confusion_matrix(y_test,y_pred)
+    print(classification_report(y_test,y_pred))
+    saveConfussionMatrix(cm, "d", "confussion_matrix_EnsembleMethodsBayesian.png", cmap='PiYG')
+    print()
+    #classification_scores.append(("EnsembleMethods", ensemble_model, ensemble_model.score(X_train,y_train), ensemble_model.score(X_test,y_test)))
+    classification_scores.append(("EnsembleMethodsBayesian", ensemble_model, f1_score(y_test, y_pred, average='weighted')))
+
     # Generar un grafico de barras con los fscores de cada clasificador
     classifiers = [classifier_score[0] for classifier_score in classification_scores]
     scores = [classifier_score[2] for classifier_score in classification_scores]
+    print("[*] Generando metricas de los diferentes modelos")
     barClassifiersFScores(classifiers, scores, "classifiers_fscores.png")
 
     # Guardar el modelo con mejor fscore
