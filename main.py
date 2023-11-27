@@ -329,15 +329,16 @@ def evaluarRuidoGraficoLineas(dataFrame):
     actions = []
     for nombreModelo,modelo in modelos:
         fscores = []
-        for actionType in ["insert"]:
+        for actionType in ["substitute"]:
             for ruido in [0.05,0.1,0.2,0.25,0.5,0.75]:
                 if f"{actionType}_{ruido}" not in actions:
                     actions.append(f"{actionType}_{ruido}")
                 print(f"Evaluando: {actionType}_{ruido}_{nombreModelo}")
                 aug = textAugmenter.RandomCharAug(action=actionType, aug_char_p=ruido)
-                X_train_tmp = []
-                for texto in X_train:
-                    X_train_tmp.append(aug.augment(texto)[0])
+                #X_train_tmp = []
+                #for texto in X_train:
+                #    X_train_tmp.append(aug.augment(texto)[0])
+                X_train_tmp = X_train
                 dataFrame_train = pd.DataFrame()
                 dataFrame_train['text'] = X_train_tmp
                 dataFrame_train['class'] = np.asarray(y_train)
@@ -360,7 +361,7 @@ def evaluarRuidoGraficoLineas(dataFrame):
     # Agregar leyenda
     plt.legend()
     # Mostrar el gráfico
-    fileName = "ruidoModelos.png"
+    fileName = "sub_ruidoModelos.png"
     plt.savefig(f"{output_dir}/{fileName}")
     plt.close()
     print(f"Imagen guardada: {output_dir}/{fileName}")
@@ -414,9 +415,10 @@ if __name__ == "__main__":
             if usarRuido:
                 df = df.sample(n=max_num_samples, random_state=42)
                 X_temp,X_ruido,y_temp,y_ruido = train_test_split(df["text"],df['class'],test_size=0.5,random_state=42)
+                gptmp = guardarPreproceso
                 guardarPreproceso = False
                 evaluarRuido(X_ruido, y_ruido)
-                guardarPreproceso = True
+                guardarPreproceso = gptmp
                 df = pd.DataFrame()
                 df['text'] = X_temp
                 df['class'] = y_temp
