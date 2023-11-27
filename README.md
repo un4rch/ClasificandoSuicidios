@@ -50,7 +50,8 @@ python3 main.py config/test_tfidf.json   # Usar tf-idf
     "pca_model": null,            # str
     "tf_idf_model": null,         # str
     "prediction_model": null,     # str
-    "max_num_samples": null       # int
+    "max_num_samples": null,      # int
+    "usarRuido": null             # true / false
 }
 ```
 3. Ejecujar el siguiente comando:
